@@ -58,18 +58,16 @@ func New() *Metrics {
 // Register registers all metrics with the given registerer.
 // Use prometheus.DefaultRegisterer for the global default registry.
 func (m *Metrics) Register(reg prometheus.Registerer) error {
-	// TODO:
-	//  for _, c := range []prometheus.Collector{
-	//      m.RequestsTotal,
-	//      m.ErrorsTotal,
-	//      m.ActiveKeys,
-	//  } {
-	//      if err := reg.Register(c); err != nil {
-	//          return err
-	//      }
-	//  }
-	//  return nil
-	return nil // remove this line when implemented
+	for _, c := range []prometheus.Collector{
+		m.RequestsTotal,
+		m.ErrorsTotal,
+		m.ActiveKeys,
+	} {
+		if err := reg.Register(c); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RecordAllow records a single allowed or denied request.
@@ -77,18 +75,19 @@ func (m *Metrics) Register(reg prometheus.Registerer) error {
 //	algorithm: "token_bucket" | "sliding_window" | "fixed_window"
 //	allowed:   true → status="allowed", false → status="denied"
 func (m *Metrics) RecordAllow(key, algorithm string, allowed bool) {
-	// TODO:
-	//  status := "allowed"
-	//  if !allowed { status = "denied" }
-	//  m.RequestsTotal.WithLabelValues(key, algorithm, status).Inc()
+	status := "allowed"
+	if !allowed {
+		status = "denied"
+	}
+	m.RequestsTotal.WithLabelValues(key, algorithm, status).Inc()
 }
 
 // RecordError records a limiter error.
 func (m *Metrics) RecordError(key, algorithm string) {
-	// TODO: m.ErrorsTotal.WithLabelValues(key, algorithm).Inc()
+	m.ErrorsTotal.WithLabelValues(key, algorithm).Inc()
 }
 
 // SetActiveKeys updates the active-keys gauge.
 func (m *Metrics) SetActiveKeys(n int) {
-	// TODO: m.ActiveKeys.Set(float64(n))
+	m.ActiveKeys.Set(float64(n))
 }

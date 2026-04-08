@@ -14,10 +14,10 @@
 package middleware
 
 import (
-	"errors"
-	"fmt"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"rate-limiter-go/limiter"
 )
@@ -49,8 +49,17 @@ type KeyExtractor func(r *http.Request) string
 //	    return host
 //	}
 func IPExtractor(r *http.Request) string {
-	// TODO: implement as described above (import "net" and "strings")
-	return r.RemoteAddr
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // HeaderExtractor returns a KeyExtractor that uses the value of a specific
@@ -67,9 +76,12 @@ func IPExtractor(r *http.Request) string {
 //	    }
 //	}
 func HeaderExtractor(header string) KeyExtractor {
-	// TODO: implement as described above
-	_ = header
-	return IPExtractor
+	return func(r *http.Request) string {
+		if v := r.Header.Get(header); v != "" {
+			return v
+		}
+		return IPExtractor(r)
+	}
 }
 
 // ─── writeHeaders ─────────────────────────────────────────────────────────────
@@ -77,16 +89,13 @@ func HeaderExtractor(header string) KeyExtractor {
 // writeHeaders sets the three standard rate-limit response headers.
 // Call this for every response (allowed and denied).
 func writeHeaders(w http.ResponseWriter, res limiter.Result) {
-	// TODO:
-	//  w.Header().Set("X-RateLimit-Limit",     strconv.FormatInt(res.Limit, 10))
-	//  w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(res.Remaining, 10))
-	//  w.Header().Set("X-RateLimit-Reset",     strconv.FormatInt(res.Reset.Unix(), 10))
-	//  if !res.Allowed {
-	//      retrySeconds := int64(res.RetryAfter.Seconds()) + 1 // round up
-	//      w.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
-	//  }
-	_ = fmt.Sprintf    // hint: not needed here but kept import tidy
-	_ = strconv.Itoa   // hint
+	w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(res.Limit, 10))
+	w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(res.Remaining, 10))
+	w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(res.Reset.Unix(), 10))
+	if !res.Allowed {
+		retrySeconds := int64(res.RetryAfter.Seconds()) + 1
+		w.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
+	}
 }
 
 // ─── net/http middleware ──────────────────────────────────────────────────────
@@ -99,27 +108,19 @@ func writeHeaders(w http.ResponseWriter, res limiter.Result) {
 //	store, _ := store.NewMemoryStore(factory)
 //	mux.Handle("/api/", middleware.HTTPMiddleware(store, middleware.IPExtractor)(apiHandler))
 func HTTPMiddleware(kl limiter.KeyedLimiter, extractor KeyExtractor) func(http.Handler) http.Handler {
-	// TODO:
-	//  return func(next http.Handler) http.Handler {
-	//      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	//          key := extractor(r)
-	//          res, err := kl.Allow(r.Context(), key)
-	//          if err != nil {
-	//              // Don't block traffic on limiter errors — log the error and allow.
-	//              next.ServeHTTP(w, r)
-	//              return
-	//          }
-	//          writeHeaders(w, res)
-	//          if !res.Allowed {
-	//              http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-	//              return
-	//          }
-	//          next.ServeHTTP(w, r)
-	//      })
-	//  }
-	_ = errors.New // hint
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			key := extractor(r)
+			res, err := kl.Allow(r.Context(), key)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			writeHeaders(w, res)
+			if !res.Allowed {
+				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+				return
+			}
 			next.ServeHTTP(w, r)
 		})
 	}

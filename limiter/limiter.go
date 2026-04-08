@@ -53,6 +53,10 @@ type KeyedLimiter interface {
 	Allow(ctx context.Context, key string) (Result, error)
 }
 
+// LimiterFactory creates a new Limiter for the given key.
+// The key is provided so implementations can vary config per tenant if needed.
+type LimiterFactory func(key string) (Limiter, error)
+
 // Config holds the parameters common to all algorithms.
 type Config struct {
 	// Rate is the maximum number of requests allowed per Window.

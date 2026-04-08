@@ -42,25 +42,29 @@ type SlidingWindowLog struct {
 //   - cfg.Rate must be > 0.
 //   - cfg.Window must be > 0.
 func NewSlidingWindowLog(cfg Config) (*SlidingWindowLog, error) {
-	// TODO:
-	//  1. Validate cfg.Rate and cfg.Window (same pattern as NewTokenBucket).
-	//  2. Return &SlidingWindowLog{cfg: cfg, log: list.New()}, nil
-
-	_ = list.New // hint
-	return nil, errors.New("not implemented")
+	if cfg.Rate <= 0 {
+		return nil, errors.New("rate must be > 0")
+	}
+	if cfg.Window <= 0 {
+		return nil, errors.New("window must be > 0")
+	}
+	return &SlidingWindowLog{cfg: cfg, log: list.New()}, nil
 }
 
 // evict removes all log entries older than (now - window).
 // Must be called while holding sw.mu.
 func (sw *SlidingWindowLog) evict(now time.Time) {
-	// TODO:
-	//  cutoff := now.Add(-sw.cfg.Window)
-	//  for {
-	//      front := sw.log.Front()
-	//      if front == nil { break }
-	//      if front.Value.(time.Time).After(cutoff) { break }
-	//      sw.log.Remove(front)
-	//  }
+	cutoff := now.Add(-sw.cfg.Window)
+	for {
+		front := sw.log.Front()
+		if front == nil {
+			break
+		}
+		if front.Value.(time.Time).After(cutoff) {
+			break
+		}
+		sw.log.Remove(front)
+	}
 }
 
 // Allow implements Limiter.
@@ -69,30 +73,27 @@ func (sw *SlidingWindowLog) Allow(_ context.Context) (Result, error) {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 
-	// TODO step 1: now := time.Now(); sw.evict(now)
+	now := time.Now()
+	sw.evict(now)
 
-	// TODO step 2: count := int64(sw.log.Len())
-	//   if count >= sw.cfg.Rate {
-	//       // oldest entry in the log tells us when the next slot opens
-	//       oldest := sw.log.Front().Value.(time.Time)
-	//       retryAt := oldest.Add(sw.cfg.Window).Sub(now)
-	//       return Result{
-	//           Allowed:    false,
-	//           Limit:      sw.cfg.Rate,
-	//           Remaining:  0,
-	//           Reset:      oldest.Add(sw.cfg.Window),
-	//           RetryAfter: retryAt,
-	//       }, nil
-	//   }
+	count := int64(sw.log.Len())
+	if count >= sw.cfg.Rate {
+		oldest := sw.log.Front().Value.(time.Time)
+		retryAt := oldest.Add(sw.cfg.Window).Sub(now)
+		return Result{
+			Allowed:    false,
+			Limit:      sw.cfg.Rate,
+			Remaining:  0,
+			Reset:      oldest.Add(sw.cfg.Window),
+			RetryAfter: retryAt,
+		}, nil
+	}
 
-	// TODO step 3: append now and return success
-	//   sw.log.PushBack(now)
-	//   return Result{
-	//       Allowed:   true,
-	//       Limit:     sw.cfg.Rate,
-	//       Remaining: sw.cfg.Rate - int64(sw.log.Len()),
-	//       Reset:     now.Add(sw.cfg.Window),
-	//   }, nil
-
-	return Result{}, errors.New("not implemented")
+	sw.log.PushBack(now)
+	return Result{
+		Allowed:   true,
+		Limit:     sw.cfg.Rate,
+		Remaining: sw.cfg.Rate - int64(sw.log.Len()),
+		Reset:     now.Add(sw.cfg.Window),
+	}, nil
 }

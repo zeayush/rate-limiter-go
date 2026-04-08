@@ -46,25 +46,26 @@ type FixedWindow struct {
 //
 // The window starts immediately on construction.
 func NewFixedWindow(cfg Config) (*FixedWindow, error) {
-	// TODO:
-	//  1. Validate cfg.Rate and cfg.Window.
-	//  2. Return &FixedWindow{
-	//         cfg:         cfg,
-	//         windowStart: time.Now(),
-	//     }, nil
-
-	return nil, errors.New("not implemented")
+	if cfg.Rate <= 0 {
+		return nil, errors.New("rate must be > 0")
+	}
+	if cfg.Window <= 0 {
+		return nil, errors.New("window must be > 0")
+	}
+	return &FixedWindow{
+		cfg:         cfg,
+		windowStart: time.Now(),
+	}, nil
 }
 
 // resetIfExpired checks whether the current window has expired and, if so,
 // resets the counter and records the new window start.
 // Must be called while holding fw.mu.
 func (fw *FixedWindow) resetIfExpired(now time.Time) {
-	// TODO:
-	//  if now.Sub(fw.windowStart) >= fw.cfg.Window {
-	//      fw.count = 0
-	//      fw.windowStart = now
-	//  }
+	if now.Sub(fw.windowStart) >= fw.cfg.Window {
+		fw.count = 0
+		fw.windowStart = now
+	}
 }
 
 // Allow implements Limiter.
@@ -73,35 +74,31 @@ func (fw *FixedWindow) Allow(_ context.Context) (Result, error) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 
-	// TODO step 1: now := time.Now(); fw.resetIfExpired(now)
+	now := time.Now()
+	fw.resetIfExpired(now)
 
-	// TODO step 2: check the counter
-	//   windowEnd := fw.windowStart.Add(fw.cfg.Window)
-	//   if fw.count >= fw.cfg.Rate {
-	//       return Result{
-	//           Allowed:    false,
-	//           Limit:      fw.cfg.Rate,
-	//           Remaining:  0,
-	//           Reset:      windowEnd,
-	//           RetryAfter: windowEnd.Sub(now),
-	//       }, nil
-	//   }
+	windowEnd := fw.windowStart.Add(fw.cfg.Window)
+	if fw.count >= fw.cfg.Rate {
+		return Result{
+			Allowed:    false,
+			Limit:      fw.cfg.Rate,
+			Remaining:  0,
+			Reset:      windowEnd,
+			RetryAfter: windowEnd.Sub(now),
+		}, nil
+	}
 
-	// TODO step 3: increment counter and return success
-	//   fw.count++
-	//   return Result{
-	//       Allowed:   true,
-	//       Limit:     fw.cfg.Rate,
-	//       Remaining: fw.cfg.Rate - fw.count,
-	//       Reset:     windowEnd,
-	//   }, nil
-
-	return Result{}, errors.New("not implemented")
+	fw.count++
+	return Result{
+		Allowed:   true,
+		Limit:     fw.cfg.Rate,
+		Remaining: fw.cfg.Rate - fw.count,
+		Reset:     windowEnd,
+	}, nil
 }
 
 // windowEnd returns the time at which the current window closes.
 // Must be called while holding fw.mu.
 func (fw *FixedWindow) windowEnd() time.Time {
-	// TODO: return fw.windowStart.Add(fw.cfg.Window)
-	return time.Time{}
+	return fw.windowStart.Add(fw.cfg.Window)
 }

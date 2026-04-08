@@ -22,8 +22,7 @@ type GinKeyExtractor func(c *gin.Context) string
 //	    return c.ClientIP()
 //	}
 func GinIPExtractor(c *gin.Context) string {
-	// TODO: return c.ClientIP()
-	return c.RemoteIP()
+	return c.ClientIP()
 }
 
 // GinHeaderExtractor returns a GinKeyExtractor that uses the value of a
@@ -40,9 +39,12 @@ func GinIPExtractor(c *gin.Context) string {
 //	    }
 //	}
 func GinHeaderExtractor(header string) GinKeyExtractor {
-	// TODO: implement as described above
-	_ = header
-	return GinIPExtractor
+	return func(c *gin.Context) string {
+		if v := c.GetHeader(header); v != "" {
+			return v
+		}
+		return c.ClientIP()
+	}
 }
 
 // GinMiddleware returns a Gin middleware HandlerFunc that rate-limits requests.
@@ -56,34 +58,26 @@ func GinHeaderExtractor(header string) GinKeyExtractor {
 // standard rate-limit headers. It also exposes the Result on the Gin context
 // under the key "rl_result" for downstream handlers that want to inspect it.
 func GinMiddleware(kl limiter.KeyedLimiter, extractor GinKeyExtractor) gin.HandlerFunc {
-	// TODO:
-	//  return func(c *gin.Context) {
-	//      key := extractor(c)
-	//      res, err := kl.Allow(c.Request.Context(), key)
-	//      if err != nil {
-	//          // Fail open: don't block traffic on limiter errors.
-	//          c.Next()
-	//          return
-	//      }
-	//      // Set headers on every response.
-	//      c.Header("X-RateLimit-Limit",     strconv.FormatInt(res.Limit, 10))
-	//      c.Header("X-RateLimit-Remaining", strconv.FormatInt(res.Remaining, 10))
-	//      c.Header("X-RateLimit-Reset",     strconv.FormatInt(res.Reset.Unix(), 10))
-	//      if !res.Allowed {
-	//          retrySeconds := int64(res.RetryAfter.Seconds()) + 1
-	//          c.Header("Retry-After", strconv.FormatInt(retrySeconds, 10))
-	//          c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-	//              "error":       "rate limit exceeded",
-	//              "retry_after": retrySeconds,
-	//          })
-	//          return
-	//      }
-	//      c.Set("rl_result", res)
-	//      c.Next()
-	//  }
-	_ = strconv.FormatInt // hint
-	_ = http.StatusTooManyRequests // hint
 	return func(c *gin.Context) {
+		key := extractor(c)
+		res, err := kl.Allow(c.Request.Context(), key)
+		if err != nil {
+			c.Next()
+			return
+		}
+		c.Header("X-RateLimit-Limit", strconv.FormatInt(res.Limit, 10))
+		c.Header("X-RateLimit-Remaining", strconv.FormatInt(res.Remaining, 10))
+		c.Header("X-RateLimit-Reset", strconv.FormatInt(res.Reset.Unix(), 10))
+		if !res.Allowed {
+			retrySeconds := int64(res.RetryAfter.Seconds()) + 1
+			c.Header("Retry-After", strconv.FormatInt(retrySeconds, 10))
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error":       "rate limit exceeded",
+				"retry_after": retrySeconds,
+			})
+			return
+		}
+		c.Set("rl_result", res)
 		c.Next()
 	}
 }

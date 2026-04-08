@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -57,17 +58,18 @@ type RedisStore struct {
 //   - fallback: an in-memory store used when Redis is unreachable. Pass nil to
 //     disable fallback (Redis errors will propagate to callers).
 func NewRedisStore(client redis.UniversalClient, cfg limiter.Config, fallback *MemoryStore) (*RedisStore, error) {
-	// TODO:
-	//  1. Validate cfg.Rate and cfg.Window.
-	//  2. Return &RedisStore{
-	//         client:   client,
-	//         cfg:      cfg,
-	//         fallback: fallback,
-	//         script:   redis.NewScript(redisFixedWindowScript),
-	//     }, nil
-
-	_ = errors.New // hint
-	return nil, errors.New("not implemented")
+	if cfg.Rate <= 0 {
+		return nil, errors.New("rate must be > 0")
+	}
+	if cfg.Window <= 0 {
+		return nil, errors.New("window must be > 0")
+	}
+	return &RedisStore{
+		client:   client,
+		cfg:      cfg,
+		fallback: fallback,
+		script:   redis.NewScript(redisFixedWindowScript),
+	}, nil
 }
 
 // windowKey returns the Redis key for the given key and current window.
@@ -79,9 +81,8 @@ func NewRedisStore(client redis.UniversalClient, cfg limiter.Config, fallback *M
 //	windowStart := time.Now().Truncate(r.cfg.Window)
 //	return fmt.Sprintf("rl:%s:%d", key, windowStart.Unix())
 func (r *RedisStore) windowKey(key string) string {
-	// TODO: implement using fmt.Sprintf
-	_ = time.Now // hint
-	return ""
+	windowStart := time.Now().Truncate(r.cfg.Window)
+	return fmt.Sprintf("rl:%s:%d", key, windowStart.Unix())
 }
 
 // Allow implements limiter.KeyedLimiter using the Lua script.
@@ -94,21 +95,44 @@ func (r *RedisStore) windowKey(key string) string {
 //  5. Build and return a Result.
 //  6. On any Redis error: if r.fallback != nil, call r.fallback.Allow(ctx, key); else return the error.
 func (r *RedisStore) Allow(ctx context.Context, key string) (limiter.Result, error) {
-	// TODO: implement using r.script.Run(ctx, r.client, []string{r.windowKey(key)}, windowMS)
-	//
-	// Parsing the Lua result (returned as []interface{}):
-	//   vals := res.([]interface{})
-	//   count := vals[0].(int64)
-	//   ttlMS := vals[1].(int64)
-	//
-	// RetryAfter when denied:
-	//   time.Duration(ttlMS) * time.Millisecond
+	windowMS := r.cfg.Window.Milliseconds() * 2
+	res, err := r.script.Run(ctx, r.client, []string{r.windowKey(key)}, windowMS).Result()
+	if err != nil {
+		if r.fallback != nil {
+			return r.fallback.Allow(ctx, key)
+		}
+		return limiter.Result{}, err
+	}
 
-	return limiter.Result{}, errors.New("not implemented")
+	vals := res.([]interface{})
+	count := vals[0].(int64)
+	ttlMS := vals[1].(int64)
+
+	allowed := count <= r.cfg.Rate
+	remaining := r.cfg.Rate - count
+	if remaining < 0 {
+		remaining = 0
+	}
+	reset := time.Now().Truncate(r.cfg.Window).Add(r.cfg.Window)
+
+	if !allowed {
+		return limiter.Result{
+			Allowed:    false,
+			Limit:      r.cfg.Rate,
+			Remaining:  0,
+			Reset:      reset,
+			RetryAfter: time.Duration(ttlMS) * time.Millisecond,
+		}, nil
+	}
+	return limiter.Result{
+		Allowed:   true,
+		Limit:     r.cfg.Rate,
+		Remaining: remaining,
+		Reset:     reset,
+	}, nil
 }
 
 // Ping checks that Redis is reachable. Use this in your health-check handler.
 func (r *RedisStore) Ping(ctx context.Context) error {
-	// TODO: return r.client.Ping(ctx).Err()
-	return errors.New("not implemented")
+	return r.client.Ping(ctx).Err()
 }
