@@ -1,7 +1,7 @@
 # rate-limiter-go
 
-![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go) ![License](https://img.shields.io/badge/license-MIT-blue) 
-
+![CI](https://github.com/zeayush/rate-limiter-go/actions/workflows/go-ci.yml/badge.svg) ![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go) ![License](https://img.shields.io/badge/license-MIT-blue)
+ 
 Production-ready HTTP rate limiting library for Go — three algorithms, two storage backends, two middleware adapters, and Prometheus metrics, all behind clean interfaces so each piece can be swapped independently.
 
 Part of a distributed systems portfolio implementing every system from Alex Xu's System Design Interview (Vol. 1 & 2). This covers rate limiting patterns from Chapter 4.
