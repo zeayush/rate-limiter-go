@@ -5,8 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"rate-limiter-go/limiter"
+
+	"github.com/gin-gonic/gin"
 )
 
 // ─── Gin middleware ───────────────────────────────────────────────────────────
@@ -16,29 +17,12 @@ import (
 type GinKeyExtractor func(c *gin.Context) string
 
 // GinIPExtractor returns the client's IP address using Gin's built-in ClientIP().
-//
-// TODO:
-//
-//	func GinIPExtractor(c *gin.Context) string {
-//	    return c.ClientIP()
-//	}
 func GinIPExtractor(c *gin.Context) string {
 	return c.ClientIP()
 }
 
 // GinHeaderExtractor returns a GinKeyExtractor that uses the value of a
 // specific HTTP header (e.g. "X-API-Key") and falls back to ClientIP().
-//
-// TODO:
-//
-//	func GinHeaderExtractor(header string) GinKeyExtractor {
-//	    return func(c *gin.Context) string {
-//	        if v := c.GetHeader(header); v != "" {
-//	            return v
-//	        }
-//	        return c.ClientIP()
-//	    }
-//	}
 func GinHeaderExtractor(header string) GinKeyExtractor {
 	return func(c *gin.Context) string {
 		if v := c.GetHeader(header); v != "" {

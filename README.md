@@ -1,27 +1,32 @@
 # rate-limiter-go
 
-A production-ready HTTP rate limiting library for Go, built as a learning project.  
-It ships three algorithms, two storage backends, two middleware adapters, and Prometheus metrics — all behind clean interfaces so each piece can be swapped independently.
+![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go) ![License](https://img.shields.io/badge/license-MIT-blue) 
+
+Production-ready HTTP rate limiting library for Go — three algorithms, two storage backends, two middleware adapters, and Prometheus metrics, all behind clean interfaces so each piece can be swapped independently.
+
+Part of a distributed systems portfolio implementing every system from Alex Xu's System Design Interview (Vol. 1 & 2). This covers rate limiting patterns from Chapter 4.
 
 ---
 
-## What is this?
+## What It Provides
 
-Rate limiting is the practice of capping how many requests a client can make within a time window. Without it, a single misconfigured client or attacker can exhaust your CPU, memory, or downstream quotas.
+- **Three algorithms**: Fixed Window Counter, Sliding Window Log, Token Bucket
+- **Two storage backends**: in-memory map (single-instance) and Redis (distributed)
+- **Two middleware adapters**: `net/http` and Gin
+- **Prometheus metrics**: request counts, error counts, and active key gauge
+- **Per-key limiting**: per IP, per API key, per user — via the `KeyedLimiter` interface
+- **Fail-open on errors**: Redis outages won't take your service down
+- **Atomic Redis operations**: Lua script eliminates the INCR/EXPIRE race condition
 
-This library implements three well-known algorithms, each with a different tradeoff:
+---
+
+## How it Works
 
 | Algorithm | Memory | Smoothness | Boundary spikes |
 |---|---|---|---|
 | Fixed Window Counter | O(1) per key | None | Yes (2× burst at boundary) |
 | Sliding Window Log | O(rate) per key | High | No |
 | Token Bucket | O(1) per key | High | No |
-
-Per-key limiting (per IP, per API key, per user) is layered on top via the `KeyedLimiter` interface backed by either in-memory maps or Redis for distributed deployments.
-
----
-
-## How it Works
 
 ### Fixed Window Counter
 
@@ -238,19 +243,17 @@ Run with:
 go test -bench=. -benchtime=5s -benchmem ./bench/
 ```
 
-Expected output (Apple M2 / Linux amd64 — actual results depend on your hardware):
+Results on Apple M1 (`go test -bench=. -benchtime=5s -benchmem ./bench/`):
 
 ```
-BenchmarkTokenBucket-8              200000000    5.2 ns/op    0 B/op    0 allocs/op
-BenchmarkTokenBucket_Parallel-8    1000000000    1.8 ns/op    0 B/op    0 allocs/op
-BenchmarkSlidingWindowLog-8          20000000   61.3 ns/op   24 B/op    1 allocs/op
-BenchmarkFixedWindow-8              500000000    3.9 ns/op    0 B/op    0 allocs/op
-BenchmarkFixedWindow_Parallel-8     800000000    2.1 ns/op    0 B/op    0 allocs/op
-BenchmarkMemoryStore_SingleKey-8    200000000    7.4 ns/op    0 B/op    0 allocs/op
-BenchmarkMemoryStore_100Keys-8       50000000   28.6 ns/op   16 B/op    1 allocs/op
+BenchmarkTokenBucket-8               62621932    97.80 ns/op    0 B/op    0 allocs/op
+BenchmarkTokenBucket_Parallel-8      26357739   218.80 ns/op    0 B/op    0 allocs/op
+BenchmarkSlidingWindowLog-8          81911437    68.77 ns/op    8 B/op    0 allocs/op
+BenchmarkFixedWindow-8              100000000    53.17 ns/op    0 B/op    0 allocs/op
+BenchmarkFixedWindow_Parallel-8      38649945   159.30 ns/op    0 B/op    0 allocs/op
+BenchmarkMemoryStore_SingleKey-8     90087270    67.65 ns/op    0 B/op    0 allocs/op
+BenchmarkMemoryStore_100Keys-8       81293835    77.41 ns/op    0 B/op    0 allocs/op
 ```
-
-The sliding window log allocates one `time.Time` per request (list element). All other algorithms are alloc-free on the hot path.
 
 ---
 
@@ -269,8 +272,6 @@ go test ./store/
 go test ./middleware/
 ```
 
-Tests are pre-written and will fail until you implement the stubs. That is intentional — the tests define the contract.
-
 ---
 
 ## Project Structure
@@ -282,20 +283,20 @@ rate-limiter-go/
 │       └── main.go          # Example Gin server (Redis + fallback)
 ├── limiter/
 │   ├── limiter.go           # Interfaces: Limiter, KeyedLimiter, Config, Result
-│   ├── tokenbucket.go       # Token bucket stub
-│   ├── slidingwindow.go     # Sliding window log stub
-│   ├── fixedwindow.go       # Fixed window counter stub
-│   └── limiter_test.go      # 17 pre-written tests
+│   ├── tokenbucket.go       # Token bucket
+│   ├── slidingwindow.go     # Sliding window log
+│   ├── fixedwindow.go       # Fixed window counter
+│   └── limiter_test.go      # 17 tests
 ├── store/
-│   ├── memory.go            # In-memory KeyedLimiter stub
-│   ├── redis.go             # Redis KeyedLimiter stub (Lua script)
-│   └── store_test.go        # 5 pre-written tests
+│   ├── memory.go            # In-memory KeyedLimiter
+│   ├── redis.go             # Redis KeyedLimiter (Lua script)
+│   └── store_test.go        # 5 tests
 ├── middleware/
-│   ├── http.go              # net/http middleware stub
-│   ├── gin.go               # Gin middleware stub
-│   └── middleware_test.go   # 7 pre-written tests
+│   ├── http.go              # net/http middleware
+│   ├── gin.go               # Gin middleware
+│   └── middleware_test.go   # 7 tests
 ├── metrics/
-│   └── metrics.go           # Prometheus counters and gauge stub
+│   └── metrics.go           # Prometheus counters and gauge
 ├── bench/
 │   └── bench_test.go        # 7 benchmarks
 ├── deploy/
@@ -303,145 +304,6 @@ rate-limiter-go/
 ├── Dockerfile               # Multi-stage: alpine builder → scratch
 ├── docker-compose.yml       # app + Redis + Prometheus + Grafana
 └── go.mod
-```
-
----
-
-## Implementation Guide
-
-The stubs contain structured `// TODO:` comments with step-by-step pseudocode. Here is the intended order:
-
-### 1. `limiter/tokenbucket.go`
-
-`NewTokenBucket`
-```
-1. Validate: Rate > 0, Window > 0.
-2. Compute rate = float64(cfg.Rate) / cfg.Window.Seconds()
-3. Set capacity = float64(cfg.Burst) if Burst > 0, else float64(cfg.Rate).
-4. Initialise tokens = capacity, lastTime = time.Now().
-```
-
-`refill(now time.Time)`
-```
-1. elapsed = now.Sub(tb.lastTime).Seconds()
-2. tb.tokens = min(tb.capacity, tb.tokens + elapsed * tb.rate)
-3. tb.lastTime = now
-```
-
-`Allow(ctx)`
-```
-1. Lock mutex.
-2. now = time.Now(); call refill(now).
-3. If tb.tokens < 1: return Result{Allowed: false, RetryAfter: (1-tokens)/rate seconds}, nil.
-4. tb.tokens -= 1
-5. Return Result{Allowed: true, Limit: cfg.Rate, Remaining: int64(tb.tokens), Reset: now.Add(1/rate)}, nil.
-```
-
-### 2. `limiter/slidingwindow.go`
-
-`NewSlidingWindowLog`
-```
-1. Validate: Rate > 0, Window > 0.
-2. Return &SlidingWindowLog{cfg: cfg, log: list.New()}.
-```
-
-`evict(now time.Time)`
-```
-1. cutoff = now.Sub(sw.cfg.Window)
-2. Walk list from front; remove elements where value.(time.Time).Before(cutoff).
-3. Stop at first element that is not before cutoff.
-```
-
-`Allow(ctx)`
-```
-1. Lock mutex.
-2. now = time.Now(); call evict(now).
-3. count = sw.log.Len()
-4. If count >= int(cfg.Rate): return denied result with RetryAfter = oldest_entry + window - now.
-5. sw.log.PushBack(now).
-6. Return allowed result; Remaining = cfg.Rate - int64(count) - 1.
-```
-
-### 3. `limiter/fixedwindow.go`
-
-`resetIfExpired(now time.Time)`
-```
-1. If now.Before(fw.windowStart.Add(cfg.Window)): return (still in window).
-2. Advance windowStart by enough full windows to cover now.
-3. Reset count = 0.
-```
-
-`Allow(ctx)`
-```
-1. Lock mutex.
-2. now = time.Now(); call resetIfExpired(now).
-3. If fw.count >= cfg.Rate: return denied result; RetryAfter = windowEnd() - now.
-4. fw.count++.
-5. Return allowed result; Remaining = cfg.Rate - fw.count.
-```
-
-### 4. `store/memory.go`
-
-`getOrCreate(key)`
-```
-1. ms.mu.RLock(); look up key in ms.limiters; ms.mu.RUnlock().
-2. If found, return it.
-3. ms.mu.Lock(); look up again (double-checked locking).
-4. If still missing: call ms.factory(key); store in ms.limiters.
-5. ms.mu.Unlock(); return limiter.
-```
-
-`Allow(ctx, key)`
-```
-1. l, err = ms.getOrCreate(key).
-2. return l.Allow(ctx).
-```
-
-### 5. `store/redis.go`
-
-`Allow(ctx, key)`
-```
-1. k = ms.windowKey(key).
-2. Run the Lua script: EVAL script 1 k cfg.Rate ttl_ms.
-3. Parse result as []int64{count, ttl_ms}.
-4. If count > cfg.Rate: return denied with RetryAfter = time.Duration(ttl_ms)*ms.
-5. Return allowed result.
-6. On any Redis error: log warning; delegate to ms.fallback.Allow(ctx, key).
-```
-
-### 6. `middleware/http.go` and `middleware/gin.go`
-
-`writeHeaders(w, res)`
-```
-1. Set X-RateLimit-Limit   = strconv.FormatInt(res.Limit, 10).
-2. Set X-RateLimit-Remaining = strconv.FormatInt(res.Remaining, 10).
-3. Set X-RateLimit-Reset   = strconv.FormatInt(res.Reset.Unix(), 10).
-4. If !res.Allowed: set Retry-After = strconv.Itoa(int(res.RetryAfter.Seconds())).
-```
-
-`HTTPMiddleware(kl, extractor)`
-```
-1. Return http.HandlerFunc that:
-   a. Extracts key via extractor(r).
-   b. Calls kl.Allow(r.Context(), key).
-   c. On error: call next (fail-open).
-   d. Call writeHeaders(w, res).
-   e. If !res.Allowed: http.Error(w, "429 Too Many Requests", 429); return.
-   f. Else: call next(w, r).
-```
-
-### 7. `metrics/metrics.go`
-
-`New()`
-```
-1. Create rate_limiter_requests_total counter vec with labels [key, algorithm, status].
-2. Create rate_limiter_errors_total counter vec with labels [key, algorithm].
-3. Create rate_limiter_active_keys gauge.
-```
-
-`Register(reg)`
-```
-1. reg.MustRegister(m.RequestsTotal, m.ErrorsTotal, m.ActiveKeys).
 ```
 
 ---

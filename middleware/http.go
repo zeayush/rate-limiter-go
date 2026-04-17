@@ -33,22 +33,6 @@ type KeyExtractor func(r *http.Request) string
 //
 // It prefers the X-Forwarded-For header (set by reverse proxies) and falls
 // back to r.RemoteAddr.
-//
-// TODO:
-//
-//	func IPExtractor(r *http.Request) string {
-//	    if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-//	        // X-Forwarded-For may be "client, proxy1, proxy2" — take the first.
-//	        if idx := strings.Index(xff, ","); idx != -1 {
-//	            return strings.TrimSpace(xff[:idx])
-//	        }
-//	        return strings.TrimSpace(xff)
-//	    }
-//	    // RemoteAddr is "host:port" — strip the port.
-//	    host, _, err := net.SplitHostPort(r.RemoteAddr)
-//	    if err != nil { return r.RemoteAddr }
-//	    return host
-//	}
 func IPExtractor(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		if idx := strings.Index(xff, ","); idx != -1 {
@@ -65,17 +49,6 @@ func IPExtractor(r *http.Request) string {
 
 // HeaderExtractor returns a KeyExtractor that uses the value of a specific
 // HTTP header (e.g. "X-API-Key") as the rate-limit key.
-//
-// TODO:
-//
-//	func HeaderExtractor(header string) KeyExtractor {
-//	    return func(r *http.Request) string {
-//	        if v := r.Header.Get(header); v != "" {
-//	            return v
-//	        }
-//	        return IPExtractor(r) // fallback to IP when header is absent
-//	    }
-//	}
 func HeaderExtractor(header string) KeyExtractor {
 	return func(r *http.Request) string {
 		if v := r.Header.Get(header); v != "" {
