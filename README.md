@@ -112,9 +112,9 @@ This starts:
 curl -i -H "X-API-Key: test-key" http://localhost:8080/api/hello
 
 # HTTP/1.1 200 OK
-# X-Ratelimit-Limit: 100
-# X-Ratelimit-Remaining: 99
-# X-Ratelimit-Reset: 1720000060
+# X-RateLimit-Limit: 100
+# X-RateLimit-Remaining: 99
+# X-RateLimit-Reset: 1720000060
 # {"message":"hello"}
 
 # Exhaust the limit (loop 105 times)
@@ -128,7 +128,7 @@ done
 curl -i -H "X-API-Key: exhausted-key" http://localhost:8080/api/hello
 # HTTP/1.1 429 Too Many Requests
 # Retry-After: 42
-# {"error":"rate limit exceeded","retry_after_seconds":42}
+# {"error":"rate limit exceeded","retry_after":42}
 
 # Health check
 curl http://localhost:8080/health

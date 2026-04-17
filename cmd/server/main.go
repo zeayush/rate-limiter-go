@@ -63,8 +63,21 @@ func main() {
 	r.Use(gin.Recovery())
 
 	// Apply rate limiting to /api routes, keyed by X-API-Key header.
+	keyExtractor := middleware.GinHeaderExtractor("X-API-Key")
 	api := r.Group("/api")
-	api.Use(middleware.GinMiddleware(redisStore, middleware.GinHeaderExtractor("X-API-Key")))
+	api.Use(func(c *gin.Context) {
+		key := keyExtractor(c)
+		c.Next()
+
+		m.SetActiveKeys(memStore.Len())
+		if _, hasErr := c.Get("rl_error"); hasErr {
+			m.RecordError(key, "fixed_window")
+			return
+		}
+		allowed := c.Writer.Status() != http.StatusTooManyRequests
+		m.RecordAllow(key, "fixed_window", allowed)
+	})
+	api.Use(middleware.GinMiddleware(redisStore, keyExtractor))
 	{
 		api.GET("/hello", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "hello, world"})
@@ -90,7 +103,6 @@ func main() {
 	// ─────────────────────────────────────────────────────────────────────────
 	addr := ":8080"
 	log.Printf("rate-limiter-go listening on %s", addr)
-	_ = m // suppress unused hint
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("server error: %v", err)
 	}

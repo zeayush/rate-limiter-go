@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"rate-limiter-go/limiter"
 )
@@ -113,6 +114,8 @@ func HTTPMiddleware(kl limiter.KeyedLimiter, extractor KeyExtractor) func(http.H
 			key := extractor(r)
 			res, err := kl.Allow(r.Context(), key)
 			if err != nil {
+				// Fail-open, but still emit standard headers for consistent clients.
+				writeHeaders(w, limiter.Result{Allowed: true, Reset: time.Now()})
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"rate-limiter-go/limiter"
@@ -60,8 +61,14 @@ func GinHeaderExtractor(header string) GinKeyExtractor {
 func GinMiddleware(kl limiter.KeyedLimiter, extractor GinKeyExtractor) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := extractor(c)
+		c.Set("rl_key", key)
 		res, err := kl.Allow(c.Request.Context(), key)
 		if err != nil {
+			// Fail-open, but keep response headers structurally consistent.
+			c.Header("X-RateLimit-Limit", "0")
+			c.Header("X-RateLimit-Remaining", "0")
+			c.Header("X-RateLimit-Reset", strconv.FormatInt(time.Now().Unix(), 10))
+			c.Set("rl_error", err)
 			c.Next()
 			return
 		}
