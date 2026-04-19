@@ -110,6 +110,57 @@ This starts:
 - **prometheus** on `:9090` — metrics scraper
 - **grafana** on `:3000` — dashboard (`admin` / `admin`)
 
+Defaults above are configurable; see **Configuration (IPs and Ports)**.
+
+### Configuration (IPs and Ports)
+
+You can configure service addresses and host ports with environment variables.
+
+#### App process
+
+| Variable | Default | Used by | Notes |
+|---|---|---|---|
+| `APP_ADDR` | unset | app | Full bind address for Gin server (example: `0.0.0.0:8081` or `:8081`). If set, it takes precedence. |
+| `PORT` | `8080` | app | Convenience port used when `APP_ADDR` is not set. |
+| `REDIS_ADDR` | `localhost:6379` (local run), `redis:6379` (Docker Compose default) | app | Redis host:port the app connects to. Can be IP or hostname. |
+
+Examples:
+
+```bash
+# Run app on port 9091
+PORT=9091 go run ./cmd/server
+
+# Bind explicitly to all interfaces on port 8081
+APP_ADDR=0.0.0.0:8081 go run ./cmd/server
+
+# Point app to external Redis
+REDIS_ADDR=10.0.0.25:6379 go run ./cmd/server
+```
+
+#### Docker Compose host ports
+
+`docker-compose.yml` supports these host-side port overrides:
+
+| Variable | Default | Mapping |
+|---|---|---|
+| `APP_PORT` | `8080` | `${APP_PORT}:8080` |
+| `REDIS_PORT` | `6379` | `${REDIS_PORT}:6379` |
+| `PROMETHEUS_PORT` | `9090` | `${PROMETHEUS_PORT}:9090` |
+| `GRAFANA_PORT` | `3000` | `${GRAFANA_PORT}:3000` |
+
+Example:
+
+```bash
+APP_PORT=8088 PROMETHEUS_PORT=9095 docker compose up --build
+```
+
+#### Prometheus and Grafana internal targets
+
+- Prometheus scrape target is configured in `deploy/prometheus.yml` (`app:8080`).
+- Grafana datasource URL is configured in `deploy/grafana/provisioning/datasources/datasource.yml` (`http://prometheus:9090`).
+
+If you change internal container ports/service names (not just host-published ports), update those two files accordingly.
+
 ### Try the API
 
 ```bash

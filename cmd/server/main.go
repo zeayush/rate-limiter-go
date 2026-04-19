@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -101,7 +102,18 @@ func main() {
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// ─────────────────────────────────────────────────────────────────────────
-	addr := ":8080"
+	addr := os.Getenv("APP_ADDR")
+	if addr == "" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		if strings.HasPrefix(port, ":") {
+			addr = port
+		} else {
+			addr = ":" + port
+		}
+	}
 	log.Printf("rate-limiter-go listening on %s", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("server error: %v", err)
