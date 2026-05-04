@@ -13,10 +13,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
-	"rate-limiter-go/limiter"
-	"rate-limiter-go/metrics"
-	"rate-limiter-go/middleware"
-	"rate-limiter-go/store"
+	"github.com/zeayush/rate-limiter-go/limiter"
+	"github.com/zeayush/rate-limiter-go/metrics"
+	"github.com/zeayush/rate-limiter-go/middleware"
+	"github.com/zeayush/rate-limiter-go/store"
 )
 
 func main() {

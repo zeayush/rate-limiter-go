@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"rate-limiter-go/limiter"
+	"github.com/zeayush/rate-limiter-go/limiter"
 )
 
 // KeyExtractor extracts the rate-limit key from an HTTP request.

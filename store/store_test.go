@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"rate-limiter-go/limiter"
+	"github.com/zeayush/rate-limiter-go/limiter"
 )
 
 // ─── MemoryStore Tests ────────────────────────────────────────────────────────

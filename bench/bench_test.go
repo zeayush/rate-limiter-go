@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"rate-limiter-go/limiter"
-	"rate-limiter-go/store"
+	"github.com/zeayush/rate-limiter-go/limiter"
+	"github.com/zeayush/rate-limiter-go/store"
 )
 
 // ─── Algorithm micro-benchmarks ───────────────────────────────────────────────

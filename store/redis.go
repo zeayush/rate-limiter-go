@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"rate-limiter-go/limiter"
+	"github.com/zeayush/rate-limiter-go/limiter"
 )
 
 // ─── Redis Store ──────────────────────────────────────────────────────────────

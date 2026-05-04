@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"rate-limiter-go/limiter"
+	"github.com/zeayush/rate-limiter-go/limiter"
 )
 
 // ─── In-Memory Per-Key Limiter ────────────────────────────────────────────────
