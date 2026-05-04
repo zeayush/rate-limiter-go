@@ -1,4 +1,4 @@
-module rate-limiter-go
+module github.com/zeayush/rate-limiter-go
 
 go 1.22
 
